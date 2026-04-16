@@ -9,7 +9,7 @@ commands = [
     ["uvicorn", "mcp_servers.search_server:app", "--port", "8003"],
     # Главный сервер (с задержкой)
     ["sleep", "3"] if sys.platform != "win32" else ["timeout", "/t", "3"],
-    ["uvicorn", "app.main:app", "--reload"],
+    ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
 ]
 
 processes = []
