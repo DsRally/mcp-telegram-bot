@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.config import settings
+from config import settings
 from app.core.memory import DatabaseMemory
 from app.telegram.bot import create_bot_app
 import asyncio
