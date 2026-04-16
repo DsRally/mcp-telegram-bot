@@ -1,4 +1,5 @@
 import inspect
+import os
 
 from langchain.tools import tool
 from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
@@ -11,11 +12,12 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM
+        # Инициализация LLM с правками под OpenRouter
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini", 
+            model="google/gemini-2.0-flash-001", 
             temperature=0, 
-            openai_api_key=settings.openai_api_key
+            openai_api_key=settings.openai_api_key,
+            base_url="https://openrouter.ai/api/v1"  # Критически важная правка для ключей sk-or-v1
         )
 
         # Инструменты
