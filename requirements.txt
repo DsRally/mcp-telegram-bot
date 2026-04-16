@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-telegram-bot
+langchain
+langchain-openai
+langchain-community
+mcp
+sqlalchemy
+aiosqlite
+pydantic-settings
+httpx
+python-dotenv
