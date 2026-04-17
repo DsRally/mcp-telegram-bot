@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
+import os
 
 app = FastAPI(title="Search MCP Server")
 
 class SearchRequest(BaseModel):
     query: str
 
-SEARCH_API_KEY = "cKhGCs5k1ycTgQWGNFFy6c4X"
+SEARCH_API_KEY = os.getenv("SERPAPI_KEY", "ckhGCs5k1ycTgQWGNFFy6c4X")
 
 @app.post("/search")
 async def search(request: SearchRequest):
