@@ -1,6 +1,7 @@
 import inspect
 import os
 
+from langchain_core.tools import tool
 from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
@@ -11,17 +12,16 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM через OpenRouter
-        # Если gemini-2.0-flash-lite-preview-02-05:free выдаст ошибку 400 снова,
-        # замените её на "google/gemini-2.0-flash-001"
+        # Инициализация LLM
+        # Если снова будет ошибка 400, замените модель на "google/gemini-2.0-flash-001"
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-001",
+            model="google/gemini-2.0-flash-lite-preview-02-05:free",
             temperature=0,
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"
         )
 
-        # Инструменты
+        # Список инструментов
         self.tools = [
             self.get_weather_tool,
             self.get_currency_tool,
