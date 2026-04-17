@@ -2,7 +2,7 @@ import inspect
 import os
 
 from langchain.tools import tool
-from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
+from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from app.config import settings
@@ -12,15 +12,15 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM с правками под OpenRouter
+        # Инициализация LLM с использованием OpenRouter
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-lite-preview-02-05:free", 
-            temperature=0, 
+            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            temperature=0,
             openai_api_key=settings.openai_api_key,
-            base_url="https://openrouter.ai/api/v1"  # Критически важная правка для ключей sk-or-v1
+            base_url="https://openrouter.ai/api/v1"
         )
 
-        # Инструменты
+        # Список инструментов
         self.tools = [
             self.get_weather_tool,
             self.get_currency_tool,
@@ -71,14 +71,14 @@ class TelegramAgent:
         try:
             history = chat_history if chat_history is not None else []
 
-            inv = self.executor.ainvoke(
+            # Запуск агента через invoke
+            result = await self.executor.ainvoke(
                 {
                     "input": message,
                     "chat_history": history,
                     "telegram_id": user_id,
                 }
             )
-            result = await inv if inspect.isawaitable(inv) else inv
 
             if not isinstance(result, dict):
                 return str(result) if result is not None else ""
