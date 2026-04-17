@@ -28,7 +28,7 @@ DATABASE_URL=sqlite:///./bot.db
 **Где получить ключи:**
 - [Telegram BotFather](https://t.me/botfather) — `TELEGRAM_BOT_TOKEN`
 - [OpenRouter](https://openrouter.ai/keys) — `OPENAI_API_KEY` (используем Gemini)
-- [OpenWeatherMap]([https://openweathermap.org/api](https://gist.github.com/lalithabacies/c8f973dc6754384d6cade282b64a8cb1)) — `WEATHER_API_KEY` (бесплатно)
+- [OpenWeatherKey](https://gist.github.com/lalithabacies/c8f973dc6754384d6cade282b64a8cb1) — `WEATHER_API_KEY` (бесплатно)
 
 ### 3. Запусти локально
 ```bash
