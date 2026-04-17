@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Запускаем MCP сервер в фоне на порту 8001
-python -c "import uvicorn; uvicorn.run('app.mcp_servers.combined_server:app', host='0.0.0.0', port=8001)" &
+# Простой запуск одного процесса на Railway
+# Railway сама установит PORT переменную
 
-# Ждём 5 секунд пока он стартует
-sleep 5
+echo "🚀 Запуск Telegram AI Agent..."
 
-# Запускаем главный сервер на порту 8000 (foreground)
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Запускаем uvicorn на порту из переменной окружения (Railway) или 8000 (локально)
+uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
