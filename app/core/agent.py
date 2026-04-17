@@ -12,49 +12,43 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM
+        # Используем стабильную версию модели
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-001", # Используем более стабильный ID
-            temperature=0,
+            model="google/gemini-2.0-flash-001", 
+            temperature=0, 
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"
         )
 
-        # Инструменты: определяем их так, чтобы 'self' не попадал в схему для нейросети
+        # Инструменты определяем здесь, чтобы исключить 'self' из схемы
         @tool
         async def get_weather(city: str) -> str:
-            """Узнать текущую погоду в указанном городе."""
+            """Узнать текущую погоду в конкретном городе."""
             return await self.mcp_client.get_weather(city)
 
         @tool
         async def get_currency(currency_code: str) -> str:
-            """Получить актуальный курс валюты (например, USD, EUR, RUB)."""
+            """Узнать курс валюты (например, USD, EUR, RUB, BTC)."""
             return await self.mcp_client.get_currency(currency_code)
 
         @tool
         async def web_search(query: str) -> str:
-            """Найти актуальную информацию в интернете по любому вопросу."""
+            """Поиск любой актуальной информации в интернете."""
             return await self.mcp_client.search(query)
 
         @tool
         async def manage_memory(action: str, fact: str = None) -> str:
-            """Сохранить ('save') новый факт о пользователе или получить ('list') список всех известных фактов."""
-            # Мы берем telegram_id из контекста вызова в process_message
-            # Но для простоты в описании инструмента оставим только action/fact
-            return "Инструмент памяти вызван" # Логика будет ниже в executor
+            """Сохранить ('save') или получить ('list') факты о пользователе."""
+            # Мы добавим логику сохранения в методе process_message для надежности
+            return "Инструмент памяти вызван"
 
         self.tools = [get_weather, get_currency, web_search, manage_memory]
 
-        # Расширенный системный промпт
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Ты — продвинутый ИИ-ассистент в Telegram.
-У тебя есть доступ к реальному времени через инструменты:
-1. Погода (get_weather)
-2. Курсы валют (get_currency)
-3. Поиск в интернете (web_search) — используй его всегда, если не знаешь точного ответа на текущую дату.
-
-Если пользователь сообщает факт о себе (например, 'Я люблю пиццу' или 'Меня зовут Алекс'), ОБЯЗАТЕЛЬНО используй инструмент памяти, чтобы сохранить это.
-Всегда старайся дать максимально точный ответ, используя свои инструменты."""),
+            ("system", """Ты — умный Telegram-ассистент. 
+Если ты не знаешь точного ответа на текущий момент (погода, валюта, новости) — ОБЯЗАТЕЛЬНО вызывай инструменты.
+Никогда не пиши код вызова функции текстом, всегда используй встроенный механизм инструментов (tool calling).
+Если пользователь говорит что-то о себе — используй manage_memory."""),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -72,8 +66,7 @@ class TelegramAgent:
         try:
             history = chat_history if chat_history is not None else []
 
-            # Перехватываем вызов инструмента памяти, чтобы подставить telegram_id
-            # Это более надежный способ, чем просить нейросеть саму вводить ID
+            # Запускаем выполнение
             result = await self.executor.ainvoke(
                 {
                     "input": message,
@@ -81,13 +74,15 @@ class TelegramAgent:
                 }
             )
 
-            # Дополнительная проверка: если нейросеть сказала сохранить факт,
-            # но мы хотим сделать это прозрачно через наш объект memory
-            if "запомнил" in result["output"].lower() or "сохранил" in result["output"].lower():
-                # Простая логика: если в сообщении есть "люблю", "зовут" и т.д.
-                self.memory.add_fact(user_id, message)
+            # Простая логика сохранения фактов, если агент решил, что это нужно
+            output = result.get("output", "")
+            
+            # Если в ответе агент говорит, что запомнил что-то, дублируем в БД
+            lower_out = output.lower()
+            if any(word in lower_out for word in ["запомнил", "сохранил", "записал"]):
+                 self.memory.add_fact(user_id, message)
 
-            return result.get("output", "Не удалось получить ответ.")
+            return output
 
         except Exception as e:
             print(f"Agent Error: {e}")
