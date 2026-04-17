@@ -1,6 +1,4 @@
 import inspect
-import os
-
 from langchain_core.tools import tool
 from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -12,7 +10,7 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Используем стабильную версию модели
+        # Обновляем модель до стабильной версии
         self.llm = ChatOpenAI(
             model="google/gemini-2.0-flash-001", 
             temperature=0, 
@@ -20,35 +18,34 @@ class TelegramAgent:
             base_url="https://openrouter.ai/api/v1"
         )
 
-        # Инструменты определяем здесь, чтобы исключить 'self' из схемы
+        # ОПРЕДЕЛЯЕМ ИНСТРУМЕНТЫ БЕЗ SELF
         @tool
         async def get_weather(city: str) -> str:
-            """Узнать текущую погоду в конкретном городе."""
+            """Узнать текущую погоду в городе. Аргумент: city (название города)."""
             return await self.mcp_client.get_weather(city)
 
         @tool
         async def get_currency(currency_code: str) -> str:
-            """Узнать курс валюты (например, USD, EUR, RUB, BTC)."""
+            """Узнать курс валюты. Аргумент: currency_code (например, USD, EUR)."""
             return await self.mcp_client.get_currency(currency_code)
 
         @tool
         async def web_search(query: str) -> str:
-            """Поиск любой актуальной информации в интернете."""
+            """Поиск информации в интернете."""
             return await self.mcp_client.search(query)
 
         @tool
-        async def manage_memory(action: str, fact: str = None) -> str:
-            """Сохранить ('save') или получить ('list') факты о пользователе."""
-            # Мы добавим логику сохранения в методе process_message для надежности
-            return "Инструмент памяти вызван"
+        async def manage_memory(fact: str) -> str:
+            """Сохранить важный факт о пользователе, который он сообщил."""
+            return f"ФАКТ_ДЛЯ_СОХРАНЕНИЯ: {fact}"
 
         self.tools = [get_weather, get_currency, web_search, manage_memory]
 
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Ты — умный Telegram-ассистент. 
-Если ты не знаешь точного ответа на текущий момент (погода, валюта, новости) — ОБЯЗАТЕЛЬНО вызывай инструменты.
-Никогда не пиши код вызова функции текстом, всегда используй встроенный механизм инструментов (tool calling).
-Если пользователь говорит что-то о себе — используй manage_memory."""),
+            ("system", """Ты — полезный ассистент. 
+Если тебе задают вопрос о погоде или валюте — ОБЯЗАТЕЛЬНО вызывай соответствующий инструмент.
+Если пользователь говорит что-то о себе — используй инструмент manage_memory.
+Отвечай всегда на языке пользователя."""),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -65,25 +62,21 @@ class TelegramAgent:
     async def process_message(self, user_id: int, message: str, chat_history: list = None) -> str:
         try:
             history = chat_history if chat_history is not None else []
+            result = await self.executor.ainvoke({
+                "input": message,
+                "chat_history": history
+            })
 
-            # Запускаем выполнение
-            result = await self.executor.ainvoke(
-                {
-                    "input": message,
-                    "chat_history": history,
-                }
-            )
-
-            # Простая логика сохранения фактов, если агент решил, что это нужно
             output = result.get("output", "")
-            
-            # Если в ответе агент говорит, что запомнил что-то, дублируем в БД
-            lower_out = output.lower()
-            if any(word in lower_out for word in ["запомнил", "сохранил", "записал"]):
-                 self.memory.add_fact(user_id, message)
+
+            # Исправляем сохранение фактов
+            if "ФАКТ_ДЛЯ_СОХРАНЕНИЯ:" in output:
+                fact = output.replace("ФАКТ_ДЛЯ_СОХРАНЕНИЯ:", "").strip()
+                self.memory.add_fact(user_id, fact)
+                return f"Я запомнил: {fact}"
 
             return output
 
         except Exception as e:
             print(f"Agent Error: {e}")
-            return f"⚠️ Ошибка агента: {str(e)}"
+            return f"⚠️ Ошибка: {str(e)}"
