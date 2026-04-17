@@ -10,7 +10,7 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Обновляем модель до стабильной версии
+        # Стабильная модель Gemini 2.0
         self.llm = ChatOpenAI(
             model="google/gemini-2.0-flash-001", 
             temperature=0, 
@@ -18,34 +18,35 @@ class TelegramAgent:
             base_url="https://openrouter.ai/api/v1"
         )
 
-        # ОПРЕДЕЛЯЕМ ИНСТРУМЕНТЫ БЕЗ SELF
         @tool
         async def get_weather(city: str) -> str:
-            """Узнать текущую погоду в городе. Аргумент: city (название города)."""
+            """Get current weather in a specific city. Argument: city (string)"""
             return await self.mcp_client.get_weather(city)
 
         @tool
         async def get_currency(currency_code: str) -> str:
-            """Узнать курс валюты. Аргумент: currency_code (например, USD, EUR)."""
+            """Get exchange rate for a currency (e.g. USD, EUR). Argument: currency_code (string)"""
             return await self.mcp_client.get_currency(currency_code)
 
         @tool
         async def web_search(query: str) -> str:
-            """Поиск информации в интернете."""
+            """Search the web for any current information."""
             return await self.mcp_client.search(query)
 
         @tool
-        async def manage_memory(fact: str) -> str:
-            """Сохранить важный факт о пользователе, который он сообщил."""
-            return f"ФАКТ_ДЛЯ_СОХРАНЕНИЯ: {fact}"
+        async def save_memory(fact: str) -> str:
+            """Save a personal fact about the user for future use."""
+            return f"SYSTEM_SAVE_FACT: {fact}"
 
-        self.tools = [get_weather, get_currency, web_search, manage_memory]
+        self.tools = [get_weather, get_currency, web_search, save_memory]
 
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Ты — полезный ассистент. 
-Если тебе задают вопрос о погоде или валюте — ОБЯЗАТЕЛЬНО вызывай соответствующий инструмент.
-Если пользователь говорит что-то о себе — используй инструмент manage_memory.
-Отвечай всегда на языке пользователя."""),
+            ("system", """Ты — официальный Telegram-ассистент. 
+Твоя задача: помогать пользователю, используя инструменты.
+1. Если вопрос про погоду или валюту — ты ОБЯЗАН вызвать инструмент.
+2. ЗАПРЕЩЕНО писать технический код или JSON пользователю.
+3. Если ты вызываешь инструмент, дождись ответа системы и перескажи его красиво.
+4. Если пользователь говорит факт о себе — используй save_memory."""),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -61,22 +62,20 @@ class TelegramAgent:
 
     async def process_message(self, user_id: int, message: str, chat_history: list = None) -> str:
         try:
-            history = chat_history if chat_history is not None else []
             result = await self.executor.ainvoke({
                 "input": message,
-                "chat_history": history
+                "chat_history": chat_history or []
             })
 
             output = result.get("output", "")
 
-            # Исправляем сохранение фактов
-            if "ФАКТ_ДЛЯ_СОХРАНЕНИЯ:" in output:
-                fact = output.replace("ФАКТ_ДЛЯ_СОХРАНЕНИЯ:", "").strip()
+            # Обработка сохранения фактов
+            if "SYSTEM_SAVE_FACT:" in output:
+                fact = output.replace("SYSTEM_SAVE_FACT:", "").strip()
                 self.memory.add_fact(user_id, fact)
-                return f"Я запомнил: {fact}"
+                return f"✅ Я запомнил: {fact}"
 
             return output
 
         except Exception as e:
-            print(f"Agent Error: {e}")
-            return f"⚠️ Ошибка: {str(e)}"
+            return f"⚠️ Ошибка агента: {str(e)}"
