@@ -14,7 +14,7 @@ class TelegramAgent:
         
         # Инициализация LLM с правками под OpenRouter
         self.llm = ChatOpenAI(
-            model="deepseek/deepseek-chat:free", 
+            model="google/gemini-2.0-flash-lite-preview-02-05:free"", 
             temperature=0, 
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"  # Критически важная правка для ключей sk-or-v1
