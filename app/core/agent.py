@@ -14,7 +14,7 @@ class TelegramAgent:
         
         # Инициализация LLM с использованием OpenRouter
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            model="google/gemini-2.0-flash-001",
             temperature=0,
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"
