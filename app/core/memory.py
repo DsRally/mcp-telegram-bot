@@ -1,6 +1,9 @@
 import json
+import logging
 from app.db.database import SessionLocal
 from app.db.models import User, Conversation, ChatHistory
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseMemory:
@@ -8,6 +11,7 @@ class DatabaseMemory:
         self.db = SessionLocal()
     
     def get_or_create_user(self, telegram_id: int, username: str = None, first_name: str = None):
+        """Находит пользователя или создаёт нового"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         
         if not user:
@@ -19,10 +23,12 @@ class DatabaseMemory:
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
+            logger.info(f"👤 Создан новый пользователь: {telegram_id}")
         
         return user
     
     def add_fact(self, telegram_id: int, fact: str):
+        """Добавляет факт о пользователе"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         
         if user:
@@ -36,11 +42,13 @@ class DatabaseMemory:
                 user.facts = json.dumps(facts_list)
                 self.db.commit()
                 self.db.refresh(user)
+                logger.info(f"💾 Факт сохранён для {telegram_id}: {fact[:50]}...")
                 return True
         
         return False
     
     def get_facts(self, telegram_id: int):
+        """Получает все факты о пользователе"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         
         if user and user.facts:
@@ -49,6 +57,7 @@ class DatabaseMemory:
         return []
     
     def save_conversation(self, telegram_id: int, message: str, response: str):
+        """Сохраняет диалог"""
         conv = Conversation(
             user_id=telegram_id,
             message=message,
@@ -66,9 +75,10 @@ class DatabaseMemory:
         )
         self.db.add(msg)
         self.db.commit()
+        logger.debug(f"💬 Сообщение сохранено: {role} - {content[:50]}...")
     
     def get_recent_history(self, user_id: int, limit: int = 5):
-        """Получает последние N сообщений"""
+        """Получает последние N сообщений в хронологическом порядке"""
         from sqlalchemy import desc
         
         messages = self.db.query(ChatHistory)\
