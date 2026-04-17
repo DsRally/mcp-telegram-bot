@@ -8,45 +8,73 @@ app = FastAPI(title="Currency MCP Server")
 class CurrencyRequest(BaseModel):
     currency: str
 
-# Твой API ключ
-API_KEY = os.getenv("EXCHANGE_RATE_API_KEY", "6bac6e0bb871fd569a25c642")
+# API ключ из переменной окружения
+EXCHANGE_RATE_API_KEY = os.getenv("EXCHANGE_RATE_API_KEY", "")
 
 @app.post("/get_rate")
 async def get_rate(request: CurrencyRequest):
-    """Реальный курс валюты к рублю"""
-    raw_currency = request.currency.upper().strip()
+    """Возвращает курс валюты к USD"""
+    currency = request.currency.upper().strip()
     
-    # Словарь синонимов для надежности
-    synonyms = {
-        "ДОЛЛАР": "USD", "ДОЛЛАРЫ": "USD", "$": "USD",
-        "ЕВРО": "EUR", "€": "EUR",
-        "ФУНТ": "GBP", "ФУНТЫ": "GBP",
-        "ГРИВНА": "UAH", "ГРН": "UAH",
-        "РУБЛЬ": "RUB", "РУБ": "RUB"
-    }
+    # Если нет API ключа — используем фиксированные курсы
+    if not EXCHANGE_RATE_API_KEY:
+        fallback_rates = {
+            "USD": 1.0,
+            "EUR": 0.92,
+            "GBP": 0.79,
+            "UAH": 36.5,
+            "RUB": 92.5,
+            "JPY": 150.2,
+            "CNY": 7.2,
+        }
+        rate = fallback_rates.get(currency)
+        if rate:
+            return {
+                "currency": currency,
+                "rate": rate,
+                "message": f"Курс {currency} к USD: {rate} (демо-данные, добавьте EXCHANGE_RATE_API_KEY для реальных курсов)"
+            }
+        else:
+            return {
+                "currency": currency,
+                "rate": None,
+                "message": f"Валюта {currency} не найдена в демо-данных."
+            }
     
-    currency = synonyms.get(raw_currency, raw_currency)
-    
-    if currency == "RUB":
-        return {"message": "Курс RUB к RUB всегда 1 к 1."}
-    
+    # Реальный API запрос
     try:
-        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/pair/{currency}/RUB"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
-            data = response.json()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Используем ExchangeRate-API
+            response = await client.get(
+                f"https://v6.exchangerate-api.com/v6/{EXCHANGE_RATE_API_KEY}/latest/USD"
+            )
             
-            if data.get("result") == "success":
-                rate = round(data["conversion_rate"], 2)
-                return {
-                    "currency": currency,
-                    "message": f"💱 Текущий курс {currency}: {rate} ₽"
-                }
+            if response.status_code == 200:
+                data = response.json()
+                rates = data.get("conversion_rates", {})
+                rate = rates.get(currency)
+                
+                if rate:
+                    return {
+                        "currency": currency,
+                        "rate": rate,
+                        "message": f"Курс {currency} к USD: {rate:.2f}"
+                    }
+                else:
+                    return {
+                        "currency": currency,
+                        "rate": None,
+                        "message": f"Валюта {currency} не найдена."
+                    }
             else:
-                return {"message": f"Не удалось найти валюту {currency}. Попробуйте код (USD, EUR)."}
+                raise Exception(f"API error: {response.status_code}")
                 
     except Exception as e:
-        return {"message": f"Ошибка сервиса валют: {str(e)}"}
+        return {
+            "currency": currency,
+            "rate": None,
+            "message": f"Ошибка получения курса: {str(e)}"
+        }
 
 if __name__ == "__main__":
     import uvicorn
