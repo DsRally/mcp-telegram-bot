@@ -1,25 +1,18 @@
 import httpx
 from typing import Dict, Any, List
-
+from app.config import settings
 
 class MCPClient:
     """Клиент для общения с MCP-серверами"""
     
     def __init__(self):
+        # ВАЖНО: В Railway localhost не работает. 
+        # Используй переменные из settings или замени на внутренние адреса Railway (напр. http://weather:8001)
         self.servers = {
-            "weather": "http://localhost:8001",
-            "currency": "http://localhost:8002",
-            "search": "http://localhost:8003",
+            "weather": getattr(settings, "weather_url", "http://localhost:8001"),
+            "currency": getattr(settings, "currency_url", "http://localhost:8002"),
+            "search": getattr(settings, "search_url", "http://localhost:8003"),
         }
-    
-    async def check_health(self, server_name: str) -> bool:
-        """Проверяет, жив ли сервер"""
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{self.servers[server_name]}/health", timeout=5.0)
-                return response.status_code == 200
-        except:
-            return False
     
     async def get_weather(self, city: str) -> str:
         """Спрашивает погоду у сервера"""
@@ -33,15 +26,16 @@ class MCPClient:
                 data = response.json()
                 return data.get("message", "Не удалось узнать погоду")
         except Exception as e:
-            return f"Ошибка погоды: {str(e)}"
+            return f"Ошибка погоды (проверьте URL): {str(e)}"
     
-    async def get_currency(self, currency: str) -> str:
-        """Спрашивает курс валюты"""
+    async def get_currency(self, currency_code: str) -> str:
+        """Спрашивает курс валюты. Аргумент совпадает с agent.py"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.servers['currency']}/get_rate",
-                    json={"currency": currency},
+                    # В API передаем ключ "currency", как ожидает твой сервер
+                    json={"currency": currency_code}, 
                     timeout=10.0
                 )
                 data = response.json()
@@ -61,16 +55,7 @@ class MCPClient:
                 data = response.json()
                 results = data.get("results", [])
                 if results:
-                    return f"Нашёл: {results[0]}"
+                    return f"Результат поиска: {results[0]}"
                 return "Ничего не найдено"
         except Exception as e:
             return f"Ошибка поиска: {str(e)}"
-    
-    def get_tools_description(self) -> str:
-        """Описание инструментов для агента"""
-        return """
-        У тебя есть доступ к инструментам:
-        1. get_weather(city) - узнать погоду в городе
-        2. get_currency(currency) - узнать курс валюты (USD, EUR, и т.д.)
-        3. search(query) - поискать информацию в интернете
-        """
