@@ -1,21 +1,15 @@
-from langchain.agents.agent import AgentExecutor
-from langchain.agents import create_tool_calling_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent  # Исправлено!
 from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from app.config import settings
 import asyncio
 
-# Дальше идет твой класс TelegramAgent без изменений...
-
-# ... остальной код без изменений
-
 class TelegramAgent:
     def __init__(self, mcp_client, memory):
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Используем современную модель. Gemini на OpenRouter лучше работает с tool_calling
         self.llm = ChatOpenAI(
             model="google/gemini-2.0-flash-001", 
             temperature=0, 
@@ -45,7 +39,6 @@ class TelegramAgent:
 
         self.tools = [get_weather, get_currency, web_search, manage_memory]
 
-        # Обновленный промпт для лучшего понимания инструментов
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", "Ты — полезный ассистент. Если пользователь спрашивает о погоде, валюте или фактах, "
                        "ТЫ ОБЯЗАН вызвать соответствующий инструмент. Не пиши код. "
@@ -55,13 +48,11 @@ class TelegramAgent:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
 
-        # ИСПОЛЬЗУЕМ create_tool_calling_agent вместо openai_functions
         self.agent = create_tool_calling_agent(self.llm, self.tools, self.prompt)
         self.executor = AgentExecutor(agent=self.agent, tools=self.tools, verbose=True)
 
     async def process_message(self, user_id: int, message: str, chat_history: list = None) -> str:
         try:
-            # Получаем все факты о пользователе из БД перед запросом
             facts = self.memory.get_facts(user_id)
             if facts:
                 facts_str = "\n".join([f"- {f.content}" for f in facts])
@@ -70,7 +61,6 @@ class TelegramAgent:
             result = await self.executor.ainvoke({"input": message, "chat_history": chat_history or []})
             output = result.get("output", "")
 
-            # Обработка сохранения фактов
             if "SYSTEM_SAVE:" in output:
                 fact = output.split("SYSTEM_SAVE:")[1].strip()
                 self.memory.add_fact(user_id, fact)
