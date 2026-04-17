@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
+import os
 
 app = FastAPI(title="Currency MCP Server")
 
@@ -8,7 +9,7 @@ class CurrencyRequest(BaseModel):
     currency: str
 
 # Твой API ключ
-API_KEY = "6bac6e0bb871fd569a25c642"
+API_KEY = os.getenv("EXCHANGE_RATE_API_KEY", "6bac6e0bb871fd569a25c642")
 
 @app.post("/get_rate")
 async def get_rate(request: CurrencyRequest):
