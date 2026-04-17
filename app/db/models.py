@@ -22,12 +22,13 @@ class Conversation(Base):
     message = Column(Text)
     response = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
-  
+
+
 class ChatHistory(Base):
     __tablename__ = "chat_history"
     
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, index=True)
     role = Column(String(20))  # "user" или "assistant"
-    content = Column(Text)     # Текст сообщения
+    content = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
