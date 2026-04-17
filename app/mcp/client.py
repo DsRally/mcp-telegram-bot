@@ -5,14 +5,15 @@ class MCPClient:
     """Клиент для общения с MCP-серверами"""
     
     def __init__(self):
+        # Все сервисы на одном порту, разные пути
+        base_url = "http://localhost:8001"  # Один сервер для всех
         self.servers = {
-            "weather": settings.weather_service_url,
-            "currency": settings.currency_service_url,
-            "search": settings.search_service_url,
+            "weather": f"{base_url}/weather",
+            "currency": f"{base_url}/currency",
+            "search": f"{base_url}/search",
         }
     
     async def get_weather(self, city: str) -> str:
-        """Спрашивает погоду у сервера"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -25,7 +26,6 @@ class MCPClient:
             return f"Ошибка сервиса погоды: {str(e)}"
     
     async def get_currency(self, currency_code: str) -> str:
-        """Спрашивает курс валюты"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -38,7 +38,6 @@ class MCPClient:
             return f"Ошибка сервиса валют: {str(e)}"
     
     async def search(self, query: str) -> str:
-        """Поиск в интернете"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
