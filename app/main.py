@@ -41,8 +41,12 @@ async def lifespan(app: FastAPI):
     
     logger.info("🚀 Инициализация приложения...")
     
-    # Создаём таблицы БД
-    init_db()
+    # Создаём таблицы БД (синхронно, т.к. SQLAlchemy синхронный)
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка инициализации БД: {e}")
+        # Продолжаем работу без БД — бот ответит, но не сохранит историю
     
     logger.info("🤖 Запускаю Telegram бота...")
     _bot_app = create_bot_app()
@@ -57,7 +61,6 @@ async def lifespan(app: FastAPI):
     )
     
     logger.info("✅ Бот запущен и слушает сообщения!")
-    logger.info(f"🌐 API доступен на порту (Railway устанавливает автоматически)")
     
     yield  # Приложение работает
     
