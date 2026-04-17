@@ -1,12 +1,17 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import random
+import httpx
+import os
 
 app = FastAPI(title="Weather MCP Server")
 
 class WeatherRequest(BaseModel):
     city: str
 
+# API ключ из переменной окружения или напрямую
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "2Y8GE4WZ3HD2FMBCGXN3MSEJ4")
+
+# Fallback на фейковые данные если API недоступен
 FAKE_WEATHER = {
     "москва": {"temp": 15, "condition": "облачно"},
     "питер": {"temp": 12, "condition": "дождь"},
@@ -16,26 +21,78 @@ FAKE_WEATHER = {
 }
 
 @app.post("/get_weather")
-def get_weather(request: WeatherRequest):
-    """Возвращает погоду в городе"""
-    city = request.city.lower().strip()
+async def get_weather(request: WeatherRequest):
+    """Возвращает погоду в городе через OpenWeatherMap API"""
+    city = request.city.strip()
+    city_lower = city.lower()
     
-    if city in FAKE_WEATHER:
-        data = FAKE_WEATHER[city]
-        return {
-            "city": request.city,
-            "temperature": data["temp"],
-            "condition": data["condition"],
-            "message": f"В городе {request.city.capitalize()}: {data['temp']}°C, {data['condition']}"
-        }
-    
-    temp = random.randint(-5, 30)
-    return {
-        "city": request.city,
-        "temperature": temp,
-        "condition": "переменная облачность",
-        "message": f"В городе {request.city.capitalize()} сейчас около {temp}°C, переменная облачность."
-    }
+    # Пробуем получить реальные данные из API
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://api.openweathermap.org/data/2.5/weather",
+                params={
+                    "q": city,
+                    "appid": OPENWEATHER_API_KEY,
+                    "units": "metric",
+                    "lang": "ru"
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                temp = int(data["main"]["temp"])
+                condition = data["weather"][0]["description"]
+                
+                return {
+                    "city": city,
+                    "temperature": temp,
+                    "condition": condition,
+                    "message": f"В городе {city.capitalize()}: {temp}°C, {condition}"
+                }
+            
+            # Если город не найден в API (404)
+            elif response.status_code == 404:
+                # Пробуем фейковые данные
+                if city_lower in FAKE_WEATHER:
+                    data = FAKE_WEATHER[city_lower]
+                    return {
+                        "city": city,
+                        "temperature": data["temp"],
+                        "condition": data["condition"],
+                        "message": f"В городе {city.capitalize()}: {data['temp']}°C, {data['condition']} (данные из кэша)"
+                    }
+                else:
+                    return {
+                        "city": city,
+                        "temperature": None,
+                        "condition": "неизвестно",
+                        "message": f"Город {city} не найден в базе данных."
+                    }
+            
+            # Другие ошибки API — fallback на фейковые
+            else:
+                raise Exception(f"API error: {response.status_code}")
+                
+    except Exception as e:
+        # При любой ошибке API — используем фейковые данные
+        if city_lower in FAKE_WEATHER:
+            data = FAKE_WEATHER[city_lower]
+            return {
+                "city": city,
+                "temperature": data["temp"],
+                "condition": data["condition"],
+                "message": f"В городе {city.capitalize()}: {data['temp']}°C, {data['condition']} (API недоступен)"
+            }
+        else:
+            import random
+            temp = random.randint(-5, 30)
+            return {
+                "city": city,
+                "temperature": temp,
+                "condition": "переменная облачность",
+                "message": f"В городе {city.capitalize()} сейчас около {temp}°C, переменная облачность. (API недоступен)"
+            }
 
 if __name__ == "__main__":
     import uvicorn
