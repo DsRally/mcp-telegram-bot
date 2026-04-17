@@ -1,12 +1,17 @@
-fastapi
-uvicorn
-python-telegram-bot
-langchain>=0.2.0
-langchain-openai
-langchain-community
-mcp
-sqlalchemy
-aiosqlite
-pydantic-settings
-httpx
-python-dotenv
+# Web framework
+fastapi==0.115.6
+uvicorn==0.32.1
+# Telegram bot
+python-telegram-bot==21.9
+# LangChain — зафиксированные совместимые версии
+langchain==0.3.25
+langchain-core==0.3.58
+langchain-openai==0.3.16
+langchain-community==0.3.24
+# Database
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+# Config & utils
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+httpx==0.28.1
