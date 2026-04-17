@@ -1,7 +1,7 @@
 """
 Главный файл FastAPI приложения.
 Запускает Telegram бота в фоне через lifespan.
-Включает MCP endpoints прямо здесь (не нужен отдельный сервер!).
+Включает MCP endpoints прямо здесь (не нужен отдельный сервер).
 """
 import asyncio
 import logging
@@ -22,16 +22,69 @@ logger = logging.getLogger(__name__)
 # Глобальный экземпляр бота (нужен для shutdown)
 _bot_app = None
 
-# === MCP Tools endpoint'ы (встроены в основной сервер) ===
+# === MCP Tools (встроенные инструменты) ===
+_mcp_tools = MCPTools(weather_api_key="")
+
 
 class ToolRequest(BaseModel):
     arguments: dict = {}
 
 
-# Инициализация инструментов
-_mcp_tools = MCPTools(weather_api_key="")
+# === Lifespan (управление жизненным циклом) ===
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Управляет жизненным циклом приложения.
+    Запускает бота при старте, останавливает при завершении.
+    """
+    global _bot_app
+    
+    logger.info("🚀 Инициализация приложения...")
+    
+    # Создаём таблицы БД
+    init_db()
+    
+    logger.info("🤖 Запускаю Telegram бота...")
+    _bot_app = create_bot_app()
+    
+    await _bot_app.initialize()
+    await _bot_app.start()
+    
+    # drop_pending_updates=True — КРИТИЧНО для Railway
+    await _bot_app.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"],
+    )
+    
+    logger.info("✅ Бот запущен и слушает сообщения!")
+    logger.info(f"🌐 API доступен на порту (Railway устанавливает автоматически)")
+    
+    yield  # Приложение работает
+    
+    # === Корректная остановка ===
+    logger.info("🛑 Останавливаю бота...")
+    try:
+        if _bot_app.updater.running:
+            await _bot_app.updater.stop()
+        if _bot_app.running:
+            await _bot_app.stop()
+        await _bot_app.shutdown()
+    except Exception as e:
+        logger.warning(f"Ошибка при остановке бота: {e}")
+    
+    logger.info("👋 Бот остановлен.")
 
 
+# === Создаём FastAPI приложение (ДО всех декораторов!) ===
+app = FastAPI(
+    title="Telegram AI Agent",
+    description="AI Telegram бот с инструментами: погода, валюты, поиск. Работает на Railway.",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+
+# === MCP API Endpoints (после создания app!) ===
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "telegram-ai-agent"}
@@ -103,59 +156,7 @@ async def api_search_info(request: ToolRequest):
     return {"result": result}
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Управляет жизненным циклом приложения.
-    Запускает бота при старте, останавливает при завершении.
-    """
-    global _bot_app
-    
-    logger.info("🚀 Инициализация приложения...")
-    
-    # Создаём таблицы БД
-    init_db()
-    
-    logger.info("🤖 Запускаю Telegram бота...")
-    _bot_app = create_bot_app()
-    
-    await _bot_app.initialize()
-    await _bot_app.start()
-    
-    # drop_pending_updates=True — КРИТИЧНО для Railway
-    await _bot_app.updater.start_polling(
-        drop_pending_updates=True,
-        allowed_updates=["message", "callback_query"],
-    )
-    
-    logger.info("✅ Бот запущен и слушает сообщения!")
-    logger.info(f"🌐 API доступен на порту (Railway устанавливает автоматически)")
-    
-    yield  # Приложение работает
-    
-    # === Корректная остановка ===
-    logger.info("🛑 Останавливаю бота...")
-    try:
-        if _bot_app.updater.running:
-            await _bot_app.updater.stop()
-        if _bot_app.running:
-            await _bot_app.stop()
-        await _bot_app.shutdown()
-    except Exception as e:
-        logger.warning(f"Ошибка при остановке бота: {e}")
-    
-    logger.info("👋 Бот остановлен.")
-
-
-# Создаём приложение с правильным lifespan
-app = FastAPI(
-    title="Telegram AI Agent",
-    description="AI Telegram бот с инструментами: погода, валюты, поиск. Работает на Railway.",
-    version="2.0.0",
-    lifespan=lifespan,
-)
-
-
+# === Основные endpoint'ы ===
 @app.get("/")
 def root():
     return {
