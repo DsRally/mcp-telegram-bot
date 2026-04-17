@@ -8,24 +8,27 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-
 class MCPTools:
     """Встроенные инструменты для агента — погода, валюты, поиск"""
     
-    def __init__(self, weather_api_key: Optional[str] = None):
-        # Читаем API ключ из переменной окружения или переданного параметра
+    def __init__(self, weather_api_key: Optional[str] = None, searchapi_key: Optional[str] = None):
+        # Читаем ключи из переменных окружения или параметров
         self.weather_api_key = weather_api_key or os.getenv("WEATHER_API_KEY", "")
+        self.searchapi_key = searchapi_key or os.getenv("SEARCHAPI_API_KEY", "")
+        
         if self.weather_api_key:
             logger.info("🌤 Weather API ключ загружен")
+        
+        if self.searchapi_key:
+            logger.info("🔍 SearchAPI ключ загружен")
         else:
-            logger.warning("⚠️ Weather API ключ не найден — погода будет примерной")
+            logger.warning("⚠️ SearchAPI ключ не найден — поиск будет ограничен Wikipedia")
     
     async def get_weather(self, city: str) -> str:
         """Получить погоду в городе через OpenWeatherMap API"""
         if not city:
             return "❌ Не указан город"
         
-        # Если нет API ключа — возвращаем fallback
         if not self.weather_api_key:
             logger.warning(f"Нет WEATHER_API_KEY для города {city}")
             return f"🌤 Погода в {city}: ~15°C, облачно. (Добавьте WEATHER_API_KEY для точных данных)"
@@ -61,12 +64,10 @@ class MCPTools:
                         f"💨 Ветер: {wind} м/с"
                     )
                 elif response.status_code == 401:
-                    logger.error("❌ Неверный Weather API ключ")
                     return "❌ Неверный API ключ погоды. Проверьте WEATHER_API_KEY."
                 elif response.status_code == 404:
                     return f"❌ Город '{city}' не найден"
                 else:
-                    logger.error(f"Ошибка погоды: {response.status_code}")
                     return f"⚠️ Ошибка сервиса погоды (код {response.status_code})"
                     
         except Exception as e:
@@ -79,33 +80,19 @@ class MCPTools:
             return "❌ Не указана валюта"
         
         currency = currency_code.upper().strip()
-        
-        # Маппинг популярных валют
         currency_map = {
-            "ДОЛЛАР": "USD",
-            "ЕВРО": "EUR",
-            "РУБЛЬ": "RUB",
-            "ГРИВНА": "UAH",
-            "ФУНТ": "GBP",
-            "ЙЕНА": "JPY",
-            "ФРАНК": "CHF",
-            "ЮАНЬ": "CNY",
+            "ДОЛЛАР": "USD", "ЕВРО": "EUR", "РУБЛЬ": "RUB", 
+            "ГРИВНА": "UAH", "ФУНТ": "GBP", "ЙЕНА": "JPY"
         }
         currency = currency_map.get(currency, currency)
         
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Бесплатный API курсов валют
-                response = await client.get(
-                    "https://api.exchangerate-api.com/v4/latest/USD"
-                )
+                response = await client.get("https://api.exchangerate-api.com/v4/latest/USD")
                 
                 if response.status_code == 200:
                     data = response.json()
                     rates = data.get("rates", {})
-                    
-                    if currency == "USD":
-                        return "💵 1 USD = 1 USD"
                     
                     if currency in rates:
                         rate = rates[currency]
@@ -116,68 +103,57 @@ class MCPTools:
                         result = f"💱 Курс {currency}:\n"
                         result += f"• 1 USD = {rate:.2f} {currency}\n"
                         if target_to_rub > 0:
-                            result += f"• 1 {currency} = {target_to_rub:.2f} RUB (рублей)"
+                            result += f"• 1 {currency} = {target_to_rub:.2f} RUB"
                         return result
-                    
-                    # Пробуем обратный курс
-                    response2 = await client.get(
-                        f"https://api.exchangerate-api.com/v4/latest/{currency}"
-                    )
-                    if response2.status_code == 200:
-                        data2 = response2.json()
-                        usd = data2.get("rates", {}).get("USD", 0)
-                        if usd:
-                            return f"💱 1 {currency} = {usd:.4f} USD"
-                    
                     return f"❌ Валюта '{currency}' не найдена"
-                else:
-                    return "❌ Не удалось получить курсы валют"
-                    
+                return "❌ Не удалось получить курсы валют"
         except Exception as e:
             logger.error(f"Ошибка валют: {e}")
-            return f"⚠️ Ошибка получения курса: {str(e)}"
+            return f"⚠️ Ошибка курса: {str(e)}"
     
     async def search(self, query: str) -> str:
-        """Поиск информации через Wikipedia"""
+        """Поиск через SearchAPI.io с откатом на Wikipedia"""
         if not query:
             return "❌ Не указан запрос"
-        
+
+        # 1. Попытка поиска через SearchAPI.io (Google Engine)
+        if self.searchapi_key:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.get(
+                        "https://www.searchapi.io/api/v1/search",
+                        params={
+                            "engine": "google",
+                            "q": query,
+                            "api_key": self.searchapi_key,
+                            "num": 3
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        results = data.get("organic_results", [])
+                        if results:
+                            out = [f"🔍 Результаты поиска: {query}\n"]
+                            for res in results[:3]:
+                                out.append(f"🔵 {res.get('title')}\n🔗 {res.get('link')}\n📝 {res.get('snippet')}\n")
+                            return "\n".join(out)
+            except Exception as e:
+                logger.error(f"Ошибка SearchAPI: {e}")
+
+        # 2. Откат на Wikipedia, если SearchAPI недоступен
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Сначала пробуем русскую Wikipedia
                 response = await client.get(
                     f"https://ru.wikipedia.org/api/rest_v1/page/summary/{query}",
                     headers={"User-Agent": "TelegramBot/1.0"}
                 )
-                
                 if response.status_code == 200:
                     data = response.json()
-                    title = data.get("title", query)
                     extract = data.get("extract", "")
-                    
                     if extract:
-                        if len(extract) > 800:
-                            extract = extract[:800] + "..."
-                        return f"📖 {title}\n\n{extract}"
-                
-                # Fallback — английская Wikipedia
-                response2 = await client.get(
-                    f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}",
-                    headers={"User-Agent": "TelegramBot/1.0"}
-                )
-                
-                if response2.status_code == 200:
-                    data2 = response2.json()
-                    extract = data2.get("extract", "")
-                    title = data2.get("title", query)
-                    
-                    if extract:
-                        if len(extract) > 800:
-                            extract = extract[:800] + "..."
-                        return f"📖 {title} (EN)\n\n{extract}"
-                
-                return f"🔍 По запросу '{query}' ничего не найдено в Wikipedia"
-                
+                        return f"📖 Wikipedia: {data.get('title')}\n\n{extract[:800]}..."
         except Exception as e:
-            logger.error(f"Ошибка поиска: {e}")
-            return f"⚠️ Ошибка поиска: {str(e)}"
+            logger.error(f"Ошибка Wikipedia: {e}")
+
+        return f"🔍 По запросу '{query}' ничего не найдено."
