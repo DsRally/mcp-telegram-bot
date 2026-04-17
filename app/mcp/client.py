@@ -2,15 +2,12 @@ import httpx
 from app.config import settings
 
 class MCPClient:
-    """Клиент для общения с MCP-серверами"""
-    
     def __init__(self):
-        # Все сервисы на одном порту, разные пути
-        base_url = "http://localhost:8001"  # Один сервер для всех
+        # Все сервисы на одном порту 8001, разные пути
         self.servers = {
-            "weather": f"{base_url}/weather",
-            "currency": f"{base_url}/currency",
-            "search": f"{base_url}/search",
+            "weather": "http://localhost:8001/weather",
+            "currency": "http://localhost:8001/currency",
+            "search": "http://localhost:8001/search",
         }
     
     async def get_weather(self, city: str) -> str:
