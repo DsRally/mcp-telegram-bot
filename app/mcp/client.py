@@ -1,10 +1,11 @@
 """
-MCP Client — теперь просто обёртка над MCPTools.
-Нет необходимости в HTTP-запросах к localhost!
+MCP Client — обёртка над MCPTools.
 """
 from app.mcp.tools import MCPTools
-from app.config import settings
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MCPClient:
@@ -17,6 +18,7 @@ class MCPClient:
         # Получаем API ключ для погоды из переменных окружения
         weather_key = os.getenv("WEATHER_API_KEY", "")
         self.tools = MCPTools(weather_api_key=weather_key)
+        logger.info("🔧 MCP Client инициализирован")
     
     async def get_weather(self, city: str) -> str:
         """Получить погоду в городе"""
