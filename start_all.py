@@ -1,14 +1,21 @@
+#!/usr/bin/env python3
+"""
+Запускает все сервисы: MCP-сервер (combined) + главный бот.
+"""
 import subprocess
 import time
 import sys
+import os
+
+# Добавляем корень проекта в PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 commands = [
-    # MCP-серверы
-    ["uvicorn", "mcp_servers.weather_server:app", "--port", "8001"],
-    ["uvicorn", "mcp_servers.currency_server:app", "--port", "8002"],
-    ["uvicorn", "mcp_servers.search_server:app", "--port", "8003"],
+    # MCP-сервер (объединённый) — запускаем первым
+    [sys.executable, "-c", 
+     "import uvicorn; uvicorn.run('app.mcp_servers.combined_server:app', host='0.0.0.0', port=8001)"],
     # Главный сервер (с задержкой)
-    ["sleep", "3"] if sys.platform != "win32" else ["timeout", "/t", "3"],
+    ["sleep", "5"],
     ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
 ]
 
@@ -16,19 +23,22 @@ processes = []
 
 for cmd in commands:
     if cmd[0] in ["sleep", "timeout"]:
-        time.sleep(3)
+        time.sleep(5)
         continue
-    print(f"Запускаю: {' '.join(cmd)}")
+    
+    print(f"Запускаю: {' '.join(cmd[:2])}...")  # Короткий вывод
     p = subprocess.Popen(cmd)
     processes.append(p)
     time.sleep(1)
 
 print("Все серверы запущены!")
-print("Погода: http://localhost:8001")
-print("Валюты: http://localhost:8002")
-print("Поиск: http://localhost:8003")
+print("MCP сервер: http://localhost:8001")
 print("Главный: http://localhost:8000")
 
-# Ждём завершения
-for p in processes:
+# Ждём завершения главного сервера (последний в списке)
+processes[-1].wait()
+
+# При завершении убиваем MCP сервер
+for p in processes[:-1]:
+    p.terminate()
     p.wait()
