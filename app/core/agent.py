@@ -12,10 +12,10 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM
-        # Если снова будет ошибка 400, замените модель на "google/gemini-2.0-flash-001"
+        # Инициализация LLM через OpenRouter
+        # Мы сменили модель на более стабильный ID, чтобы избежать ошибки 400
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            model="google/gemini-2.0-flash-001",
             temperature=0,
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"
@@ -72,7 +72,7 @@ class TelegramAgent:
         try:
             history = chat_history if chat_history is not None else []
 
-            # Запуск агента
+            # Запуск агента через ainvoke
             result = await self.executor.ainvoke(
                 {
                     "input": message,
