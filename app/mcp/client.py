@@ -1,49 +1,31 @@
-import httpx
+"""
+MCP Client — теперь просто обёртка над MCPTools.
+Нет необходимости в HTTP-запросах к localhost!
+"""
+from app.mcp.tools import MCPTools
 from app.config import settings
+import os
+
 
 class MCPClient:
+    """
+    Клиент для инструментов MCP.
+    Работает напрямую (без HTTP) — идеально для Railway с одним процессом.
+    """
+    
     def __init__(self):
-        # Все сервисы на одном порту 8001, разные пути
-        self.servers = {
-            "weather": "http://localhost:8001/weather",
-            "currency": "http://localhost:8001/currency",
-            "search": "http://localhost:8001/search",
-        }
+        # Получаем API ключ для погоды из переменных окружения
+        weather_key = os.getenv("WEATHER_API_KEY", "")
+        self.tools = MCPTools(weather_api_key=weather_key)
     
     async def get_weather(self, city: str) -> str:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.servers['weather']}/get_weather",
-                    json={"city": city},
-                    timeout=10.0
-                )
-                return response.json().get("message", "Не удалось получить данные о погоде")
-        except Exception as e:
-            return f"Ошибка сервиса погоды: {str(e)}"
+        """Получить погоду в городе"""
+        return await self.tools.get_weather(city)
     
     async def get_currency(self, currency_code: str) -> str:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.servers['currency']}/get_rate",
-                    json={"currency": currency_code},
-                    timeout=10.0
-                )
-                return response.json().get("message", "Не удалось получить курс")
-        except Exception as e:
-            return f"Ошибка сервиса валют: {str(e)}"
+        """Получить курс валюты"""
+        return await self.tools.get_currency(currency_code)
     
     async def search(self, query: str) -> str:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.servers['search']}/search",
-                    json={"query": query},
-                    timeout=10.0
-                )
-                data = response.json()
-                results = data.get("results", [])
-                return results[0] if results else "Ничего не найдено"
-        except Exception as e:
-            return f"Ошибка поиска: {str(e)}"
+        """Поиск информации"""
+        return await self.tools.search(query)
