@@ -1,9 +1,9 @@
 """
 Встроенные инструменты MCP — работают напрямую через HTTP API.
-Нет необходимости в отдельном MCP сервере!
 """
 import httpx
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -13,18 +13,24 @@ class MCPTools:
     """Встроенные инструменты для агента — погода, валюты, поиск"""
     
     def __init__(self, weather_api_key: Optional[str] = None):
-        self.weather_api_key = weather_api_key or ""
+        # Читаем API ключ из переменной окружения или переданного параметра
+        self.weather_api_key = weather_api_key or os.getenv("WEATHER_API_KEY", "")
+        if self.weather_api_key:
+            logger.info("🌤 Weather API ключ загружен")
+        else:
+            logger.warning("⚠️ Weather API ключ не найден — погода будет примерной")
     
     async def get_weather(self, city: str) -> str:
-        """Получить погоду в городе"""
+        """Получить погоду в городе через OpenWeatherMap API"""
         if not city:
             return "❌ Не указан город"
         
+        # Если нет API ключа — возвращаем fallback
+        if not self.weather_api_key:
+            logger.warning(f"Нет WEATHER_API_KEY для города {city}")
+            return f"🌤 Погода в {city}: ~15°C, облачно. (Добавьте WEATHER_API_KEY для точных данных)"
+        
         try:
-            # Бесплатный API без ключа (fallback)
-            if not self.weather_api_key:
-                return f"🌤 Погода в {city}: ~15°C, облачно. (Для точных данных добавьте WEATHER_API_KEY)"
-            
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     "http://api.openweathermap.org/data/2.5/weather",
@@ -43,16 +49,25 @@ class MCPTools:
                     description = data["weather"][0]["description"]
                     humidity = data["main"]["humidity"]
                     wind = data["wind"]["speed"]
+                    city_name = data.get("name", city)
+                    
+                    logger.info(f"✅ Погода получена для {city_name}: {temp}°C")
                     
                     return (
-                        f"🌤 Погода в {city}:\n"
+                        f"🌤 Погода в {city_name}:\n"
                         f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)\n"
                         f"☁️ {description.capitalize()}\n"
                         f"💧 Влажность: {humidity}%\n"
                         f"💨 Ветер: {wind} м/с"
                     )
-                else:
+                elif response.status_code == 401:
+                    logger.error("❌ Неверный Weather API ключ")
+                    return "❌ Неверный API ключ погоды. Проверьте WEATHER_API_KEY."
+                elif response.status_code == 404:
                     return f"❌ Город '{city}' не найден"
+                else:
+                    logger.error(f"Ошибка погоды: {response.status_code}")
+                    return f"⚠️ Ошибка сервиса погоды (код {response.status_code})"
                     
         except Exception as e:
             logger.error(f"Ошибка погоды: {e}")
