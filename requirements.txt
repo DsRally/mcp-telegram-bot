@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-telegram-bot
-langchain
+langchain>=0.2.0
 langchain-openai
 langchain-community
 mcp
