@@ -1,4 +1,5 @@
-<br> 🤖 Telegram AI Agent<br>AI-ассистент в Telegram с интеллектуальными инструментами. Бот использует LangChain + OpenRouter (Gemini) для обработки запросов и сохраняет контекст разговора в PostgreSQL.
+<br> 🤖 Telegram AI Agent<br>
+AI-ассистент в Telegram с интеллектуальными инструментами. Бот использует LangChain + OpenRouter (Gemini) для обработки запросов и сохраняет контекст разговора в PostgreSQL.
 ## ✨ Возможности
 | Функция | Описание |
 |---------|----------|
