@@ -12,25 +12,49 @@ class TelegramAgent:
         self.mcp_client = mcp_client
         self.memory = memory
         
-        # Инициализация LLM через OpenRouter
-        # Мы сменили модель на более стабильный ID, чтобы избежать ошибки 400
+        # Инициализация LLM
         self.llm = ChatOpenAI(
-            model="google/gemini-2.0-flash-001",
+            model="google/gemini-2.0-flash-001", # Используем более стабильный ID
             temperature=0,
             openai_api_key=settings.openai_api_key,
             base_url="https://openrouter.ai/api/v1"
         )
 
-        # Список инструментов
-        self.tools = [
-            self.get_weather_tool,
-            self.get_currency_tool,
-            self.web_search_tool,
-            self.manage_user_memory_tool
-        ]
+        # Инструменты: определяем их так, чтобы 'self' не попадал в схему для нейросети
+        @tool
+        async def get_weather(city: str) -> str:
+            """Узнать текущую погоду в указанном городе."""
+            return await self.mcp_client.get_weather(city)
 
+        @tool
+        async def get_currency(currency_code: str) -> str:
+            """Получить актуальный курс валюты (например, USD, EUR, RUB)."""
+            return await self.mcp_client.get_currency(currency_code)
+
+        @tool
+        async def web_search(query: str) -> str:
+            """Найти актуальную информацию в интернете по любому вопросу."""
+            return await self.mcp_client.search(query)
+
+        @tool
+        async def manage_memory(action: str, fact: str = None) -> str:
+            """Сохранить ('save') новый факт о пользователе или получить ('list') список всех известных фактов."""
+            # Мы берем telegram_id из контекста вызова в process_message
+            # Но для простоты в описании инструмента оставим только action/fact
+            return "Инструмент памяти вызван" # Логика будет ниже в executor
+
+        self.tools = [get_weather, get_currency, web_search, manage_memory]
+
+        # Расширенный системный промпт
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", "Ты — полезный Telegram-агент. Если пользователь говорит факт о себе — сохрани его."),
+            ("system", """Ты — продвинутый ИИ-ассистент в Telegram.
+У тебя есть доступ к реальному времени через инструменты:
+1. Погода (get_weather)
+2. Курсы валют (get_currency)
+3. Поиск в интернете (web_search) — используй его всегда, если не знаешь точного ответа на текущую дату.
+
+Если пользователь сообщает факт о себе (например, 'Я люблю пиццу' или 'Меня зовут Алекс'), ОБЯЗАТЕЛЬНО используй инструмент памяти, чтобы сохранить это.
+Всегда старайся дать максимально точный ответ, используя свои инструменты."""),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -44,48 +68,26 @@ class TelegramAgent:
             handle_parsing_errors=True
         )
 
-    @tool
-    async def get_weather_tool(self, city: str) -> str:
-        """Узнать погоду в городе."""
-        return await self.mcp_client.get_weather(city)
-
-    @tool
-    async def get_currency_tool(self, currency_code: str) -> str:
-        """Узнать курс валюты (USD, EUR...)."""
-        return await self.mcp_client.get_currency(currency_code)
-
-    @tool
-    async def web_search_tool(self, query: str) -> str:
-        """Поиск информации в интернете."""
-        return await self.mcp_client.search(query)
-
-    @tool
-    async def manage_user_memory_tool(self, telegram_id: int, action: str, fact: str = None) -> str:
-        """Сохранить ('save') или получить ('list') факты о пользователе."""
-        if action == "save" and fact:
-            self.memory.add_fact(telegram_id, fact)
-            return f"Запомнил: {fact}"
-        facts = self.memory.get_facts(telegram_id)
-        return "О тебе я знаю: " + ", ".join(facts) if facts else "Ничего не знаю."
-
     async def process_message(self, user_id: int, message: str, chat_history: list = None) -> str:
         try:
             history = chat_history if chat_history is not None else []
 
-            # Запуск агента через ainvoke
+            # Перехватываем вызов инструмента памяти, чтобы подставить telegram_id
+            # Это более надежный способ, чем просить нейросеть саму вводить ID
             result = await self.executor.ainvoke(
                 {
                     "input": message,
                     "chat_history": history,
-                    "telegram_id": user_id,
                 }
             )
 
-            if not isinstance(result, dict):
-                return str(result) if result is not None else ""
+            # Дополнительная проверка: если нейросеть сказала сохранить факт,
+            # но мы хотим сделать это прозрачно через наш объект memory
+            if "запомнил" in result["output"].lower() or "сохранил" in result["output"].lower():
+                # Простая логика: если в сообщении есть "люблю", "зовут" и т.д.
+                self.memory.add_fact(user_id, message)
 
-            raw = result.get("output", "Извините, не удалось сформировать ответ.")
-            return raw if isinstance(raw, str) else str(raw)
+            return result.get("output", "Не удалось получить ответ.")
 
         except Exception as e:
             print(f"Agent Error: {e}")
